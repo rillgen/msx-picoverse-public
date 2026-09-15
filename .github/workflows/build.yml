@@ -15,8 +15,42 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
+  wifi-bios:
+    name: Assemble WiFi BIOS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SJASMPLUS_VERSION: v1.24.0
+    steps:
+      - uses: actions/checkout@v4
+      # The ROM checked into 2350/software/wifi/bios is not reproducible from
+      # its own source, so assemble it here and let every tool embed the result.
+      - name: Build sjasmplus ${{ env.SJASMPLUS_VERSION }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$SJASMPLUS_VERSION" --recurse-submodules \
+            --shallow-submodules https://github.com/z00m128/sjasmplus.git "$RUNNER_TEMP/sjasmplus"
+          make -C "$RUNNER_TEMP/sjasmplus" -j"$(nproc)"
+          echo "$RUNNER_TEMP/sjasmplus" >> "$GITHUB_PATH"
+      - name: Assemble ESP8266P.rom
+        run: |
+          set -euo pipefail
+          make -C 2350/software/wifi/bios
+          rom=2350/software/wifi/bios/build/ESP8266P.rom
+          size=$(wc -c < "$rom")
+          test "$size" -eq 16384 || { echo "Unexpected ROM size: $size"; exit 1; }
+          sha256sum "$rom"
+      - name: Upload the assembled ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: wifi-bios-rom
+          path: 2350/software/wifi/bios/build/ESP8266P.rom
+          if-no-files-found: error
+          retention-days: 14
+
   build:
     name: ${{ matrix.name }}
+    needs: wifi-bios
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -34,7 +68,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build native tools from the bundled payloads
+      # scripts/build.py prefers a component's build/ output over the checked-in
+      # binary, so this is what the native tools embed.
+      - name: Fetch the assembled WiFi BIOS ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: wifi-bios-rom
+          path: 2350/software/wifi/bios/build
+      - name: Build native tools
         run: make tools
       - name: Test payload embedding and UF2 validation
         run: make test

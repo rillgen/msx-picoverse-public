@@ -150,8 +150,16 @@ can still copy to `dist/`; the helper disables that via `PICOVERSE_COPY_TO_DIST`
 
 ## Z80 source builds
 
-The default native build reuses the distributed menu and WiFi ROMs. Optional
+The default native build reuses the distributed menu ROM. Optional
 WiFi assembly uses `sjasmplus` from `PATH`, overridable with `SJASMPLUS`.
+
+The WiFi BIOS is the exception to "reuse what is distributed": CI assembles
+`ESP8266P.rom` from `ESP8266_memio.asm` on every run (see below), because the
+ROM checked into `2350/software/wifi/bios` cannot be reproduced from that source
+with current sjasmplus. Locally, `make -C 2350/software/wifi/bios` writes
+`build/ESP8266P.rom`, and the next `make tools` embeds it in place of the checked-in
+binary. Remove that `build/` directory to go back to the distributed ROM; either
+way, `tool/build/inputs.json` records which payload was used.
 Optional MSX menu builds require SDCC and a compatible Fusion-C checkout supplied
 through `FUSION_DIR`. They use the repository's Intel HEX converter instead of
 a platform-specific `hex2bin` executable. See the component Makefiles for targets.
@@ -172,8 +180,12 @@ make tools PROJECTS='2350-loadrom 2350-multirom 2350-explorer'
 - SHA-256 checksum files, input manifests and the project license.
 
 The GitHub Actions workflow runs for PRs, pushes to `main`/`codex/**`, manual runs,
-and pushed tags. It builds/tests on Linux x86-64, macOS Apple Silicon and macOS
-Intel. Every platform generates and structurally validates all UF2 recipes;
+and pushed tags. A first job assembles the WiFi BIOS with sjasmplus **v1.24.0**,
+built from source and pinned so the ROM is reproducible, and publishes it as the
+`wifi-bios-rom` artifact; every platform job downloads it into
+`2350/software/wifi/bios/build/` before compiling, so all published tools and
+images embed the same freshly assembled ROM rather than the checked-in binary.
+It then builds/tests on Linux x86-64, macOS Apple Silicon and macOS Intel. Every platform generates and structurally validates all UF2 recipes;
 the Linux job packages the shared firmware download. Artifacts from ordinary
 runs are retained for 14 days.
 
