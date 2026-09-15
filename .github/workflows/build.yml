@@ -1,0 +1,135 @@
+name: Build tools and firmware
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  wifi-bios:
+    name: Assemble WiFi BIOS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SJASMPLUS_VERSION: v1.24.0
+    steps:
+      - uses: actions/checkout@v4
+      # The ROM checked into 2350/software/wifi/bios is not reproducible from
+      # its own source, so assemble it here and let every tool embed the result.
+      - name: Build sjasmplus ${{ env.SJASMPLUS_VERSION }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$SJASMPLUS_VERSION" --recurse-submodules \
+            --shallow-submodules https://github.com/z00m128/sjasmplus.git "$RUNNER_TEMP/sjasmplus"
+          make -C "$RUNNER_TEMP/sjasmplus" -j"$(nproc)"
+          echo "$RUNNER_TEMP/sjasmplus" >> "$GITHUB_PATH"
+      - name: Assemble ESP8266P.rom
+        run: |
+          set -euo pipefail
+          make -C 2350/software/wifi/bios
+          rom=2350/software/wifi/bios/build/ESP8266P.rom
+          size=$(wc -c < "$rom")
+          test "$size" -eq 16384 || { echo "Unexpected ROM size: $size"; exit 1; }
+          sha256sum "$rom"
+      - name: Upload the assembled ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: wifi-bios-rom
+          path: 2350/software/wifi/bios/build/ESP8266P.rom
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    name: ${{ matrix.name }}
+    needs: wifi-bios
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-24.04
+          - name: macos-arm64
+            runner: macos-15
+          - name: macos-x86_64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # scripts/build.py prefers a component's build/ output over the checked-in
+      # binary, so this is what the native tools embed.
+      - name: Fetch the assembled WiFi BIOS ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: wifi-bios-rom
+          path: 2350/software/wifi/bios/build
+      - name: Build native tools
+        run: make tools
+      - name: Test payload embedding and UF2 validation
+        run: make test
+      - name: Package native tools
+        run: python3 scripts/release.py package --only tools
+      - name: Generate and validate every system image
+        run: make firmware
+      - name: Package firmware for release
+        if: matrix.name == 'linux-x86_64'
+        run: python3 scripts/release.py package --only firmware
+      - name: Upload native tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: tools-${{ matrix.name }}
+          path: |
+            build/release/picoverse-tools-*.tar.gz
+            build/release/picoverse-tools-*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload firmware
+        if: matrix.name == 'linux-x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build/release/picoverse-firmware.zip
+            build/release/picoverse-firmware.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish tagged release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Create release and upload archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packages
+          sha256sum -c ./*.sha256
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "$RELEASE_TAG"
+          fi
+          gh release upload "$RELEASE_TAG" ./*.tar.gz ./*.zip ./*.sha256 --clobber
