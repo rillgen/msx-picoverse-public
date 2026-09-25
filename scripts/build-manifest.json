@@ -25,7 +25,7 @@
   "2350-loadrom": {
     "directory": "2350/software/loadrom.pio/tool",
     "program": "loadrom",
-    "version": "v2.75",
+    "version": "v2.77",
     "assets": {
       "loadrom.h": "../pico/loadrom/dist/loadrom.bin",
       "nextor_sunrise.h": "../resources/Nextor-2.1.4.SunriseIDE.MasterOnly.ROM",
@@ -52,7 +52,7 @@
   "2350-explorer": {
     "directory": "2350/software/explorer.pio/tool",
     "program": "explorer",
-    "version": "v2.49",
+    "version": "v2.52",
     "assets": {
       "explorer.h": "../pico/explorer/build/explorer.bin",
       "menu.h": "../msx/dist/menu.rom",

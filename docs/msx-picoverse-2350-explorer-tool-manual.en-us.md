@@ -32,7 +32,7 @@ Use the Explorer tool when you want a menu that loads ROMs from flash, microSD, 
 1. Put all `.ROM` files you want in the Pico flash into a single folder (no subfolders).
 2. Run the tool in that folder to create `explorer.uf2`.
 3. Put the PicoVerse 2350 into BOOTSEL mode and copy the UF2 to the `RPI-RP2` drive.
-4. (Optional) Copy more `.ROM` and `.MP3` files to a microSD card for SD loading.
+4. (Optional) Copy more `.ROM`, `.DSK` and `.MP3` files to a microSD card for SD loading.
 5. (Optional) Insert an ESP-01 module and configure WiFi from the Explorer menu if you want to browse File Hunter.
 6. Insert the cartridge into your MSX and power on.
 
@@ -44,6 +44,7 @@ Use the Explorer tool when you want a menu that loads ROMs from flash, microSD, 
 - **WiFi configuration**: Press `F4` to enter the WiFi setup flow used by the ESP8266P-compatible WiFi firmware.
 - **Automatic detection** of MSX models that support 80-column text mode. Compatible machines boot the menu in 80 columns; others fall back to 40 columns, and you can press `C` at any time to toggle between layouts.
 - MP3 entries from the microSD card are listed in the menu with a "MP3" type label and open an **MP3 player** screen when selected.
+- `.DSK` disk images from the microSD card are listed with a "DSK" type label and **boot the MSX from the image** through the embedded Nextor kernel.
 - ROM entries open a ROM screen that lets you inspect mapper detection, choose **audio profiles** including SCC/SCC+, Dual PSG, or MSX-MUSIC where supported, enable optional primary **PSG** mirroring to the DAC, and enable optional WiFi support for Sunrise Nextor entries before running.
 
 ## Command-line usage
@@ -57,16 +58,31 @@ explorer.exe [options]
 - `-h`, `--help` : Show usage help and exit.
 - `-o <filename>`, `--output <filename>` : Set UF2 output filename (default is `explorer.uf2`).
 - `-a`, `--allnextor` : Include every embedded Sunrise Nextor SYSTEM entry listed below while still scanning and appending `.ROM` files from the current folder.
-- `-s1`, `--sunrise-sd` : Include Sunrise IDE Nextor using the on-board microSD card slot.
-- `-m1`, `--mapper-sd` : Include Sunrise IDE Nextor on microSD plus the 1MB PSRAM-backed MSX memory mapper.
-- `-c1`, `--carnivore2-sd` : Include Sunrise IDE Nextor on microSD plus the 1MB mapper and Carnivore2-compatible RAM-mode target for `SROM.COM /D15`.
-- `-r1`, `--megaram-sd` : Include Sunrise IDE Nextor on microSD plus the 1MB mapper and a separate 1MB MegaRAM subslot.
-- `-s2`, `--sunrise-usb` : Include Sunrise IDE Nextor using USB mass storage on the cartridge USB-C port.
-- `-m2`, `--mapper-usb` : Include Sunrise IDE Nextor on USB plus the 1MB PSRAM-backed MSX memory mapper.
-- `-c2`, `--carnivore2-usb` : Include Sunrise IDE Nextor on USB plus the 1MB mapper and Carnivore2-compatible RAM-mode target for `SROM.COM /D15`.
-- `-r2`, `--megaram-usb` : Include Sunrise IDE Nextor on USB plus the 1MB mapper and a separate 1MB MegaRAM subslot.
+- `-s1`, `--sunrise-sd` : Include Nextor Sunrise 2.1.4 using the on-board microSD card slot.
+- `-m1`, `--mapper-sd` : Include Nextor Sunrise 2.1.4 on microSD plus the 1MB PSRAM-backed MSX memory mapper.
+- `-c1`, `--carnivore2-sd` : Include Nextor Sunrise 2.1.4 on microSD plus the 1MB mapper and Carnivore2-compatible RAM-mode target for `SROM.COM /D15`.
+- `-r1`, `--megaram-sd` : Include Nextor Sunrise 2.1.4 on microSD plus the 1MB mapper and a separate 1MB MegaRAM subslot.
+- `-s2`, `--sunrise-usb` : Include Nextor Sunrise 2.1.4 using USB mass storage on the cartridge USB-C port.
+- `-m2`, `--mapper-usb` : Include Nextor Sunrise 2.1.4 on USB plus the 1MB PSRAM-backed MSX memory mapper.
+- `-c2`, `--carnivore2-usb` : Include Nextor Sunrise 2.1.4 on USB plus the 1MB mapper and Carnivore2-compatible RAM-mode target for `SROM.COM /D15`.
+- `-r2`, `--megaram-usb` : Include Nextor Sunrise 2.1.4 on USB plus the 1MB mapper and a separate 1MB MegaRAM subslot.
 
 The Sunrise Nextor options can be combined. Each selected option creates a separate SYSTEM entry in the Explorer flash list, followed by any `.ROM` files found in the current folder. Use `-a` / `--allnextor` when you want all eight Nextor entries in one UF2.
+
+Nextor entries always show the Nextor version in the Explorer menu:
+
+| Option | Menu entry name |
+|---|---|
+| `-s1` | `Nextor Sunrise 2.1.4 (SD)` |
+| `-m1` | `Nextor Sunrise 2.1.4 + 1MB Mapper (SD)` |
+| `-c1` | `Nextor Sunrise 2.1.4 + 1MB Mapper + C2 RAM (SD)` |
+| `-r1` | `Nextor Sunrise 2.1.4 + 1MB Mapper + 1MB MegaRAM (SD)` |
+| `-s2` | `Nextor Sunrise 2.1.4 (USB)` |
+| `-m2` | `Nextor Sunrise 2.1.4 + 1MB Mapper (USB)` |
+| `-c2` | `Nextor Sunrise 2.1.4 + 1MB Mapper + C2 RAM (USB)` |
+| `-r2` | `Nextor Sunrise 2.1.4 + 1MB Mapper + 1MB MegaRAM (USB)` |
+
+Per-entry options (audio profile, PSG Mirror, WiFi, SD partition) are saved in a `.PVC` file named after the menu entry, so options saved by a UF2 that used the older names (`Nextor Sunrise IDE ...`) are not picked up and the entries start with default options.
 
 ### Example
 
@@ -93,19 +109,48 @@ This includes the selected Nextor entries and the supported folder ROMs in one E
 For the flash entries, the PC tool analyzes each ROM to determine the mapper. If you need to override it, add a mapper tag to the filename before `.ROM`. Tags are case-insensitive.
 
 Supported tags:
-`PL-16`, `PL-32`, `KonSCC`, `Linear`, `PL-64`, `ASC-08`, `ASC-16`, `Konami`, `NEO-8`, `NEO-16`, `ASC-16X`, `MANBW2`.
+`PLA-16`, `PLA-32`, `KonSCC`, `PLN-48`, `PLN-64`, `ASC-08`, `ASC-16`, `Konami`, `NEO-8`, `NEO-16`, `ASC16X`, `ASC16X-FR`, `MANBW2`.
 
 Mapper detection on the Pico (for unknown SD ROMs) and on the PC tool both use a shared SHA-1 ROM database derived from openMSX's `softwaredb.xml`, falling back to heuristic scanning when the SHA-1 is not in the database.
 
 Example:
 
 ```
-Knight Mare.PL-32.ROM
+Knight Mare.PLA-32.ROM
 ```
 
 Notes:
 - The `SYSTEM` tag is ignored and cannot be forced.
 - Unsupported ROMs are skipped.
+
+## ASCII16-X with FlashROM (`ASC16X-FR`)
+
+ASCII16-X cartridges carry a real FlashROM chip, and the mapper specification lets software erase sectors and program bytes so a game can store save games, high scores or user created levels inside the cartridge itself.
+
+Explorer provides two ASCII16-X mappers:
+
+| Mapper | Tag | Behaviour |
+| --- | --- | --- |
+| 12 | `ASC16X` | Read-only cartridge. Bank switching only; flash command sequences are ignored. |
+| 22 | `ASC16X-FR` | Adds the writable FlashROM device and persists it to the microSD card. |
+
+Auto-detection is unchanged: a ROM recognised as ASCII16-X is always detected as plain `ASC16X`. FlashROM emulation is opt-in, either by tagging the file `<name>.ASC16X-FR.ROM` or by selecting **ASC16X-FR** in the **Mapper** field of the ROM screen.
+
+With `ASC16X-FR` the cartridge implements the command set the specification names as the guaranteed minimum — autoselect, CFI query, chip erase, sector erase and byte program — plus the software reset. Sector geometry follows the documented bottom-boot layout: eight 8 KB sectors followed by 64 KB sectors.
+
+The flash contents are mirrored to a file named after the ROM in the root of the microSD card:
+
+```
+/<ROM name>.FLA
+```
+
+The file has no header: it is a byte exact image of the cartridge flash, so it can be copied off the card and inspected, or used as a ROM image. It is matched to the running cartridge by name and size.
+
+Notes:
+- The image is created in full the first time the cartridge runs with a card that has no matching `.FLA`, while the MSX is still held at boot. Restoring an existing image happens at the same point, and the ROM screen shows "Preparing FlashROM image, please wait..." while either runs.
+- Write-back runs on Core 0 during gaps in cartridge access, so saving works with every audio profile. The MSX may stutter briefly while a save is being written to the card.
+- Without a usable microSD card the flash is still emulated, but its contents are lost at power off.
+- The emulated device is sized to the next power of two at or above the ROM size, up to 8 MB (the full size the ASCII-X XL cartridges provide). When the MSX-MUSIC audio profile is active the bank cache has to live in PSRAM alongside the array, which lowers the ceiling to 4 MB.
 
 ## Using microSD with Explorer
 
@@ -115,8 +160,9 @@ Explorer can load ROMs from a microSD card in addition to flash. ROMs on SD are 
 - Explorer can enumerate supported primary and logical partitions. Press `P` while in the `F2` microSD screen to cycle between supported partitions.
 - The selected Explorer browsing partition is saved in `/PICOVERSE.PVC` on the first supported partition and restored on later boots.
 - The lower status area shows the selected partition label and free MB. In 40-column mode, the label and free-space amount alternate so both remain readable.
-- Copy `.ROM` and `.MP3` files to the root of the card or organize them in subfolders for better organization.
+- Copy `.ROM`, `.DSK` and `.MP3` files to the root of the card or organize them in subfolders for better organization.
 - SD ROMs appear in the menu with the source label "SD".
+- `.DSK` disk images appear in the menu with the "DSK" type label and boot through the embedded Nextor kernel (see [Running .DSK disk images](#running-dsk-disk-images)).
 - MP3 files appear in the menu with the "MP3" type label and open the MP3 player screen.
 - Flash ROMs appear with the source label "FL".
 - File Hunter downloads are saved directly to the root of the microSD card and then appear as normal SD ROM files in the Explorer root list.
@@ -128,6 +174,24 @@ Explorer can load ROMs from a microSD card in addition to flash. ROMs on SD are 
 Sunrise Nextor SYSTEM entries use stricter partition rules than the normal `F2` microSD browser. Nextor SD storage is offered only for FAT16 microSD partitions up to 4 GB. FAT32 and exFAT partitions remain usable for Explorer file browsing, ROM loading, MP3/WAV playback, and File Hunter downloads, but they are not offered to Sunrise Nextor SYSTEM ROMs.
 
 When a Sunrise Nextor SYSTEM entry is opened in the ROM screen, Explorer shows the compatible FAT16 partition label in the `SD Part` option. If more than one compatible FAT16 partition exists, use Left/Right on `SD Part` to choose the partition before running. The selected partition is saved in that ROM's `.PVC` options file, so each Sunrise Nextor SYSTEM entry can remember its own storage partition.
+
+### Running .DSK disk images
+
+Explorer lists `.DSK` floppy disk images found on the microSD card next to the ROMs, with the "DSK" type label. Selecting one and choosing Run boots the MSX from that image (full technical details: [DSK Disk Image Support](./msx-picoverse-2350-dsk-support.md)):
+
+- The image is copied into PSRAM and exposed to the MSX as the disk of a Sunrise IDE interface, driven by the Nextor 2.1.4 kernel that every Explorer UF2 embeds as a hidden payload (no `-s1`/`-a` option is required).
+- Nextor mounts the image as a single unpartitioned FAT12 drive. Disks with an MSX-DOS 1 boot sector (the usual game disks with `MSXDOS.SYS`, `AUTOEXEC.BAS` or a boot-sector loader) make Nextor start in MSX-DOS 1 mode automatically; hold `1` during boot to force it for other disks.
+- Writes (game saves, `SAVE`, `COPY`) are written straight through to the `.DSK` file on the card, sector by sector, so nothing is lost on power-off. The file's timestamp is not updated.
+- The image boots read-only (writes report a disk error) when the file has the read-only attribute or is split into more than 16 fragments on the card. Copy a fragmented image to a freshly formatted card, or defragment it, to make it writable.
+- Only standard floppy images are listed: exactly 360 KB (368,640 bytes) or 720 KB (737,280 bytes). Files of any other size are not shown.
+- Only the PSG Mirror option is available for `.DSK` entries; cartridge audio profiles, WiFi, mapper override, 50/60Hz and CPU speed options are not offered.
+
+Current limitations:
+
+- One image per boot. Multi-disk games cannot swap disks yet; return to the menu to change the image.
+- Copy-protected disks and software that programs a floppy controller directly do not work, because there is no floppy controller to emulate.
+- Software that needs every byte of RAM may still fail under Nextor, which reserves more work area than a plain floppy disk ROM.
+- On machines with an internal floppy drive, the cartridge's drive is `A:` only when the cartridge slot is scanned before the internal disk ROM.
 
 ### microSD limitations
 
@@ -280,7 +344,7 @@ MP3 decoding runs on the Pico side and streams stereo PCM to the cartridge I2S D
 
 Selecting a ROM entry opens a ROM details screen before running:
 
-- **Mapper**: Shows the detected mapper (for SD ROMs) and allows manual override using Left/Right.
+- **Mapper**: Shows the detected mapper (for SD ROMs) and allows manual override using Left/Right. The cycle includes **ASC16X-FR**, which runs an ASCII16-X ROM with FlashROM emulation so the game can save into the cartridge; see [ASCII16-X with FlashROM](#ascii16-x-with-flashrom-asc16x-fr).
 - **Audio**: Choose an audio profile with Left/Right (None, SCC, SCC+, external SCC/SCC+, Dual PSG, MSX-MUSIC, SFG01/SFG05, SFG01/SFG05 at 4 MHz). The menu only cycles through profiles supported by the selected ROM mapper.
 - **PSG**: Choose whether to mirror the MSX primary PSG writes through the cartridge DAC. The default is Yes unless saved `.PVC` options override it.
 - **Wifi**: For standalone Sunrise Nextor and Sunrise + 1MB mapper entries only, choose whether to expose the ESP8266P WiFi BIOS before running. Carnivore2 and MegaRAM Nextor entries do not expose WiFi. The default is No.

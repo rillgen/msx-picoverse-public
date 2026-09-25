@@ -182,11 +182,6 @@ unsigned char record_mapper_code(unsigned char mapper) {
     return mapper & ~(SOURCE_SD_FLAG | FOLDER_FLAG | MP3_FLAG);
 }
 
-int record_mapper_is_override(unsigned char mapper) {
-    (void)mapper;
-    return 0;
-}
-
 static void build_menu_row_text(const ROMRecord *record, const char *name_override, char *out, unsigned char width) {
     const char *source = (record->Mapper & SOURCE_SD_FLAG) ? "SD" : "FL";
     const char *type_label = " ROM";
@@ -203,6 +198,8 @@ static void build_menu_row_text(const ROMRecord *record, const char *name_overri
     } else if (record_is_mp3(record)) {
         type_label = " MP3";
         source = "SD";
+    } else if (record_mapper_code(record->Mapper) == 23) {
+        type_label = " DSK";
     }
 
     if (!record_is_folder(record)) {
@@ -805,16 +802,23 @@ static int wait_for_key_with_scroll(void)
 // mapper_description - Get the description of the mapper type
 // This function will return the description of the mapper type based on the mapper number.
 char* mapper_description(int number) {
-    // Array of strings for the descriptions
-    const char *descriptions[] = {"PLA-16", "PLA-32", "KonSCC", "PLN-48", "ASC-08", "ASC-16", "Konami", "NEO-8", "NEO-16", "SYSTEM", "SYSTEM", "ASC16X", "PLN-64", "MANBW2"};
+    // Array of strings for the descriptions. Static so SDCC keeps it in ROM
+    // instead of rebuilding the pointer table on the stack at every call.
+    static const char *const descriptions[] = {"PLA-16", "PLA-32", "KonSCC", "PLN-48", "ASC-08", "ASC-16", "Konami", "NEO-8", "NEO-16", "SYSTEM", "SYSTEM", "ASC16X", "PLN-64", "MANBW2"};
     number = record_mapper_code((unsigned char)number);
     if (number >= 15 && number <= 21) {
         return "SYSTEM";
     }
+    if (number == 22) {
+        return "ASC16X-FR";
+    }
+    if (number == 23) {
+        return "DSK";
+    }
     if (number <= 0 || number > 14) {
         return "Unknown";
     }
-    return descriptions[number - 1];
+    return (char *)descriptions[number - 1];
 }
 
 // --- Menu rendering ---
@@ -927,6 +931,17 @@ void loadGame(int index)
     Poke(MP3_CTRL_CMD, MP3_CMD_STOP);
     if ((record->Mapper & ~SOURCE_SD_FLAG) != 0)
     {
+        /* ASC16X-FR syncs the cartridge with its .FLA image on the microSD
+           before the game starts, which takes a few seconds on a large ROM.
+           Warn here rather than in the ROM screen so both ways of launching
+           a game - Enter from the detail page and Space from the list - show
+           it. */
+        if (record_mapper_code(record->Mapper) == MAPPER_ASCII16X_FR)
+        {
+            menu_ui_clear_rows(22, 24);
+            Locate(0, 22);
+            printf("Preparing FlashROM image, please wait...");
+        }
         save_last_selection((unsigned int)index); // Remember it for the next boot
         Poke(ROM_SELECT_REGISTER, index); // Set the game index (absolute)
         execute_rst00(); // Execute RST 00h to reset the MSX computer and load the game
